@@ -9,6 +9,8 @@
 To add a screen, add a module to monitor/screens/ with a docstring (its first line is the summary here),
 TITLE and build_screen(args), which returns the JSON document for the board. It can also have
 add_arguments(parser) for its own options, and check_args(parser, args) to reject bad combinations of them.
+A screen that runs by itself instead of being posted once or on a schedule has main(args) in place of TITLE and
+build_screen; it returns the exit code.
 """
 
 import argparse
@@ -65,6 +67,8 @@ def main():
         screen = screens[args.command]
         if hasattr(screen, "check_args"):
             screen.check_args(commands[args.command], args)
+        if hasattr(screen, "main"):
+            return screen.main(args)
         return run(screen.build_screen, args, screen.TITLE)
     else:
         parser.print_help()

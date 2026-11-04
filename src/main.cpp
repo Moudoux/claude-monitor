@@ -550,11 +550,69 @@ static int16_t paintGraph(int16_t y, JsonObjectConst item) {
   return y + max<int16_t>(gap, 0);
 }
 
+// A face: two rounded eyes and a mouth, in "color" on black, "height" pixels high (40-140, default 90).
+// {"face": {...}} sets its expression, so a script can animate it by posting frames. All are optional:
+//   eyes  how open the eyes are, 0-1 (default 1)      lookX, lookY  where they look, -1 to 1 (default 0)
+//   smile the mouth's curve, -1 (frown) to 1 (default 0)   mouth  how open the mouth is, 0-1 (default 0)
+// Returns the y below it.
+static int16_t paintFace(int16_t y, JsonObjectConst item) {
+  const int16_t h = constrain(item["height"] | 90, 40, 140);
+  if (y + h > FOOTER_Y) return FOOTER_Y;
+  JsonObjectConst face = item["face"];
+  const uint16_t color = parseColor(item["color"], WHITE);
+  const float scale = h / 90.0f;
+
+  const float lookX = constrain(face["lookX"] | 0.0f, -1.0f, 1.0f) * 10 * scale;
+  const float lookY = constrain(face["lookY"] | 0.0f, -1.0f, 1.0f) * 6 * scale;
+  const float eyeCentres[] = {SCREEN_W / 2 - 46 * scale + lookX, SCREEN_W / 2 + 46 * scale + lookX};
+  const float eyeY = 30 * scale + lookY, eyeW = 15 * scale;
+  const float eyeH = max(2.0f, constrain(face["eyes"] | 1.0f, 0.0f, 1.0f) * 20 * scale);
+  const float eyeR = min(eyeW, eyeH);
+
+  const float smile = constrain(face["smile"] | 0.0f, -1.0f, 1.0f) * 10 * scale;
+  const float mouthOpen = constrain(face["mouth"] | 0.0f, 0.0f, 1.0f) * 8 * scale;
+  const float mouthX = SCREEN_W / 2 + lookX / 3, mouthW = 26 * scale, mouthThick = 2 * scale;
+  const float mouthY = 68 * scale - smile / 2; // the centre of the curve stays about where it is
+
+  const int16_t rows = min<int16_t>(h + WIDGET_GAP, FOOTER_Y - y);
+  tft.startPixels(0, y, SCREEN_W, rows);
+  for (int16_t py = 0; py < rows; py++) {
+    memset(rowPixels, 0, sizeof(rowPixels));
+    const float cy = py + 0.5f;
+
+    if (fabsf(cy - eyeY) < eyeH + 1) {
+      for (float ex : eyeCentres) {
+        const int16_t left = ex - eyeW - 1, right = ex + eyeW + 1;
+        for (int16_t x = left; x <= right; x++) {
+          const float qx = fabsf(x + 0.5f - ex) - (eyeW - eyeR), qy = fabsf(cy - eyeY) - (eyeH - eyeR);
+          const float d = qx > 0 && qy > 0 ? sqrtf(qx * qx + qy * qy) - eyeR : max(qx, qy) - eyeR;
+          rowPixels[x] = mix(BLACK, color, alpha(0.5f - d));
+        }
+      }
+    }
+
+    // The mouth is a parabola that opens up in the middle, with round ends
+    const int16_t left = mouthX - mouthW, right = mouthX + mouthW;
+    for (int16_t x = left; x <= right; x++) {
+      const float dx = fabsf(x + 0.5f - mouthX), edge = mouthW - dx;
+      if (edge <= 0) continue;
+      const float bulge = 1 - sq(dx / mouthW);
+      const float cap = edge < mouthThick ? sqrtf(sq(mouthThick) - sq(mouthThick - edge)) : mouthThick;
+      const float centre = mouthY + smile * bulge, half = cap + mouthOpen * bulge;
+      if (fabsf(cy - centre) > half + 1) continue;
+      rowPixels[x] = mix(BLACK, color, alpha(min(py + 1.0f, centre + half) - max(float(py), centre - half)));
+    }
+    tft.pushPixels(rowPixels, SCREEN_W);
+  }
+  return y + rows;
+}
+
 // Draws a document like
 //   {"title": "Build", "color": "green",
 //    "lines": ["plain text", {"text": "big", "size": 3, "color": "#ff8800"}]}
 // "text" may be given instead of "lines" for a single block (newlines allowed). All keys are optional.
-// An entry in "lines" can also be a bar ({"bar": 62, ...}, see paintBar()) or a graph ({"graph": [...]}, see paintGraph()).
+// An entry in "lines" can also be a bar ({"bar": 62, ...}, see paintBar()), a graph ({"graph": [...]}, see paintGraph())
+// or a face ({"face": {...}}, see paintFace()).
 static void drawDocument(JsonDocument& doc) {
   const char* title = doc["title"];
   int16_t y;
@@ -579,6 +637,8 @@ static void drawDocument(JsonDocument& doc) {
       y = paintBar(y, item.as<JsonObjectConst>());
     } else if (item["graph"].is<JsonArray>()) {
       y = paintGraph(y, item.as<JsonObjectConst>());
+    } else if (item["face"].is<JsonObject>()) {
+      y = paintFace(y, item.as<JsonObjectConst>());
     } else if (item.is<JsonObject>()) {
       uint8_t size = constrain(item["size"] | defaultSize, 1, 4);
       y = paintWrapped(y, item["text"] | "", parseColor(item["color"], defaultColor), size);
@@ -626,7 +686,11 @@ static const char USAGE[] PROGMEM =
     "   \"labels\":[\"now\",\"+12h\",\"+24h\"], \"marker\":0}\n"
     "Only the bar or graph key is needed. color \"heat\" is a green-to-red gradient for bars\n"
     "(the default) and colours a graph's line by its height, blue to red. marker puts a dot\n"
-    "on that point (counting from 0); labels are spread evenly under the graph.\n";
+    "on that point (counting from 0); labels are spread evenly under the graph.\n"
+    "\n"
+    "So can a face, which a script can animate by posting frames:\n"
+    "  {\"face\":{\"eyes\":1, \"lookX\":0, \"lookY\":0, \"smile\":0.5, \"mouth\":0}, \"color\":\"#d97757\", \"height\":90}\n"
+    "eyes and mouth are how open they are (0-1); lookX, lookY and smile go from -1 to 1.\n";
 
 static void handleUsage() { server.send_P(200, "text/plain", USAGE); }
 

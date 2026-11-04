@@ -2,10 +2,11 @@
 
 A small Wi-Fi status display: an ESP-12F NodeMCU drives a 2.4" 320x240 ILI9341 TFT (the screen from a JYE Tech DSO138 oscilloscope) over an 8-bit parallel bus. Python scripts on your computer post screens to it over HTTP.
 
-Two screens are included:
+Three screens are included:
 
 - `claude_usage`: your Claude 5-hour and weekly usage limits, read from `claude -p /usage`, which costs no tokens
 - `weather <city>`: current weather from [Open-Meteo](https://open-meteo.com), which needs no API key
+- `voice`: talk to Claude hands-free, and see a face and its short replies on the display
 
 ## Layout
 
@@ -60,11 +61,12 @@ python3 monitor/cli.py help weather                       # show a screen's opti
 python3 monitor/cli.py weather Amsterdam                  # update once
 python3 monitor/cli.py weather Amsterdam --schedule 600   # update every 10 minutes until Ctrl+C
 python3 monitor/cli.py claude_usage --schedule 60
+python3 monitor/cli.py voice                              # talk to Claude hands-free until Ctrl+C
 ```
 
 The tool looks for the board at `http://claude-monitor.local`. To use another address, pass `--display`, for example `--display http://192.168.1.51`.
 
-The `claude_usage` screen needs the [Claude Code](https://claude.com/claude-code) CLI installed and signed in.
+The `claude_usage` and `voice` screens need the [Claude Code](https://claude.com/claude-code) CLI installed and signed in. `voice` also needs a microphone, PulseAudio or PipeWire's `parecord`, and a speech package, installed once with `python3 -m venv .venv && .venv/bin/pip install faster-whisper`. It hears everything in the room and spends your Claude usage on what it answers, so by default it can only reply and search the web.
 
 ## Add a screen
 
@@ -74,3 +76,5 @@ Add a module to `monitor/screens/` with:
 - `TITLE`
 - `build_screen(args)`, which returns the JSON document for the board
 - optionally, `add_arguments(parser)` for its own options and `check_args(parser, args)` to reject bad combinations of them
+
+A screen that runs by itself, as `voice` does, has `main(args)` in place of `TITLE` and `build_screen`, and returns the exit code.

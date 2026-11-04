@@ -9,6 +9,7 @@ PlatformIO project: an ESP-12F NodeMCU (CP2102 USB-serial) driving a JYE Tech DS
 - `monitor/screens/`: the screens, found automatically; the docstring in `cli.py` says what a screen module needs
   - `claude_usage`: the user's Claude 5-hour and weekly usage limits
   - `weather <city>`: current weather from Open-Meteo (no API key)
+  - `voice`: hands-free chat with an animated face and short replies. `parecord` audio goes through a loudness-based speech detector, then local Whisper (`faster-whisper`, in the git-ignored `.venv`, which the screen restarts itself into), then one long-running `claude -p` in stream-json mode. It deliberately doesn't use Claude Code's `/voice`, which is push-to-talk in the interactive app only. Claude runs with `--restricted --strict-mcp-config --tools WebSearch` from an empty folder, because anyone in earshot can talk to it; keep it that way by default. `monitor/voice_context.txt` is the user-editable context loaded at startup; the rules for fitting the screen stay in `voice.py`.
 - `src/logo.h`: boot screen logo, generated from `assets/apple-logo.png` by `python3 -I tools/logo2header.py assets/apple-logo.png src/logo.h`; regenerate it rather than editing it
 
 ## Flashing
