@@ -23,7 +23,7 @@ This is the procedure that works reliably (about 7 s per upload):
    Both must print nothing. Culprits include `pio device monitor` in the user's VS Code terminal, the PlatformIO extension's serial monitor, a `readserial.py` still running in the background, and another Claude session flashing or reading at the same time. Don't kill the user's monitor yourself: ask them to close it.
 2. **Upload:**
    ```
-   cd "/home/user/Documents/Code/Claude Monitor" && ~/.local/bin/pio run -t upload
+   ~/.local/bin/pio run -t upload   # from the repo root
    ```
    `platformio.ini` already sets `upload_port = /dev/ttyUSB0` and `upload_speed = 460800`. The default esptool stub is fine; no `--no-stub`, no extra flags. Auto-reset over RTS/DTR works, and nobody needs to press the board's buttons.
 3. **Check what was built.** The upload log's "Wrote N bytes" should match the source you meant to flash. Another session or the user's editor can change `src/main.cpp` between your edit and your build.
